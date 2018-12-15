@@ -18,6 +18,8 @@ import android.support.v4.content.ContextCompat;
 import android.util.Log;
 import android.widget.Toast;
 
+import com.example.amin.favspot.helper.DatabaseHelper;
+import com.example.amin.favspot.model.Place;
 import com.google.android.gms.maps.CameraUpdate;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -27,6 +29,7 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
 
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -36,6 +39,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private GoogleMap mMap;
     LocationManager locationManager;
     LocationListener locationListener;
+    private DatabaseHelper db;
+    ArrayList<Place> placeArrayList = new ArrayList<Place>();
+
 
     public void centerMapOnLocation(Location location, String title) {
         if (location != null) {
@@ -55,8 +61,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
                 Location lastLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
                 centerMapOnLocation(lastLocation, "Your Location");
-                Log.d("test", "on request premission result");
-
             }
 
         }
@@ -70,6 +74,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
+
+        db = new DatabaseHelper(this);
+
     }
 
 
@@ -79,16 +86,16 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         mMap.setOnMapLongClickListener(this);
 
-        Log.d("test", "on map ready");
-
-
         Intent intent = getIntent();
-        if (intent.getIntExtra("place", 0) == 0) {
+
+        if (intent.getStringExtra("location").contains("a")) {
+            Log.d("test intent", "in request add location");
+
             locationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
             locationListener = new LocationListener() {
                 @Override
                 public void onLocationChanged(Location location) {
-                    centerMapOnLocation(location, "Your Location");
+//                    centerMapOnLocation(location, "Your Location");
                 }
 
                 @Override
@@ -115,29 +122,26 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                     locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
                     Location lastLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
                     centerMapOnLocation(lastLocation, "Your Location");
-                    Log.d("test", "in check self premission");
+                    Log.d("test", "in if sdk  not less 23");
+
 
                 } else {
-                    Log.d("test", "in request premission");
                     ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 1);
                 }
             }
         } else {
-            Log.d("test", "in place locations");
             Location placeLocation = new Location(LocationManager.GPS_PROVIDER);
-            placeLocation.setLatitude(MainActivity.locations.get(intent.getIntExtra("place", 0)).latitude);
-            placeLocation.setLongitude(MainActivity.locations.get(intent.getIntExtra("place", 0)).longitude);
-            centerMapOnLocation(placeLocation, MainActivity.places.get(intent.getIntExtra("place", 0)));
+            placeLocation.setLatitude(MainActivity.placeArrayList.get(intent.getIntExtra("place", 0)).getLatitude());
+            placeLocation.setLongitude(MainActivity.placeArrayList.get(intent.getIntExtra("place", 0)).getLongitude());
+            centerMapOnLocation(placeLocation, MainActivity.placeArrayList.get(intent.getIntExtra("place", 0)).getAddress());
         }
 
-        Toast.makeText(getApplicationContext(), Integer.toString(intent.getIntExtra("place", 0)), Toast.LENGTH_SHORT).show();
     }
 
     @Override
     public void onMapLongClick(LatLng latLng) {
         Geocoder geocoder = new Geocoder(getApplicationContext(), Locale.getDefault());
         String address = "";
-        Log.d("test", "on map long click");
 
         try {
             List<Address> listAddresses = geocoder.getFromLocation(latLng.latitude, latLng.longitude, 1);
@@ -153,28 +157,46 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                         if (address.indexOf("Unnamed") != -1) {
                             address = "";
                             SimpleDateFormat simpleDateFormat = new SimpleDateFormat("HH:mm yyyy-MM-dd");
-                            address += " 'طريق غير معلوم بتاريخ : " + simpleDateFormat.format(new Date());
+                            address += "طريق غير معلوم";
 
                         } else {
                             // doSomething
                         }
                     } else {
-                        // do something
+                        // doSomething
                     }
                 }
             } else {
-                SimpleDateFormat simpleDateFormat = new SimpleDateFormat("HH:mm yyyy-MM-dd");
-                address += " مكان غير معلوم بتاريخ : " + simpleDateFormat.format(new Date());
+                // doSomething
             }
         } catch (Exception e) {
+            e.printStackTrace();
         }
 
-        MainActivity.locations.add(latLng);
-        MainActivity.places.add(address);
-        MainActivity.arrayAdapter.notifyDataSetChanged();
-
         mMap.addMarker(new MarkerOptions().position(latLng).title(address));
+        addPlace(address, latLng.latitude, latLng.longitude);
 
+
+
+    }
+
+    private void addPlace(String address, Double lat, Double lng) {
+
+        long id = db.insertPlace(address, lat, lng);
+        Place n = db.getPlace(id);
+
+        if (n != null) {
+            placeArrayList.add(0, n);
+            placeArrayList.clear();
+            placeArrayList.addAll(db.getAllPlaces());
+
+        }
+    }
+
+    @Override
+    public void onBackPressed() {
+        Intent intent = new Intent(getApplicationContext(), MainActivity.class);
+        startActivity(intent);
 
     }
 }
